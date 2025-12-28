@@ -1,0 +1,182 @@
+\documentclass[11pt,a4paper,twocolumn]{article}
+
+% ---------- PACKAGES ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage[numbers]{natbib}
+
+\geometry{margin=1in}
+
+% ---------- TITLE INFO ----------
+\title{Trade-off between Small and Large Transformers for German NER Fine-Tuning}
+\author{Luca Sander}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% ---------- ABSTRACT ----------
+\begin{abstract}
+% Write this last.
+% - Task + motivation
+% - What you compare (models + frozen vs finetune + optional last4)
+% - Dataset + metric
+% - Main results + takeaway
+TODO
+\end{abstract}
+
+% ---------- 1. INTRO ----------
+\section{Introduction}
+% Motivation, setting, contributions.
+TODO
+
+% ---------- 2. PROBLEM + RESEARCH QUESTIONS ----------
+\section{Problem Statement and Research Questions}
+% Make it explicit what you test (efficiency, specialization, training depth).
+% Add 2-4 research questions + hypotheses.
+TODO
+
+% ---------- 3. BACKGROUND (SHORT) ----------
+\section{Background}
+% Keep concise: transformers, token classification, BIO, GermEval outer/inner.
+TODO
+
+% ---------- 4. RELATED WORK ----------
+\section{Related Work}
+% 3-6 citations: GermEval14, transformer NER for German, efficiency tradeoffs.
+TODO
+
+% ---------- 5. DATA ----------
+\section{Dataset}
+% GermEval14 format, label set, outer vs nested, what you use/ignore, preprocessing.
+The dataset we use in this study is the GermEval 2014 NER dataset \cite{germeval14_hf}, which builds upon the annotation published by Benikova \cite{benikova_nosta-d_nodate}, which after some adjustments became the dataset used for the GermEval 2014 shared task \cite{benikova_germeval_nodate} and was downloaded from the Hugging Face datasets library. The dataset contains German text from Wikipedia and news articles, annotated with named entities in a nested format. In total the dataset contains over 30,000 sentences with approximately 590,000 tokens. The dataset is split into:
+\begin{itemize}
+    \item Training set: 24,002 sentences
+    \item Development set: 2,200 sentences
+    \item Test set: 5,100 sentences
+\end{itemize}
+The dataset includes annotations for 4 main entity types: \textit{Person}, \textit{Organization}, \textit{Location}, and \textit{Other}. Each entity type also has subtypes, namely \textit{part} and \textit{deriv}, which leads to a total of 12 distict entity labels. The dataset also uses nested annotations, meaning that entities can be contained within other entities. An example of that would be \textit{"FC BAYERN MUNICH"}, where \textit{"MUNICH"} is firstly annotated as an \textit{Organization}, but in a nested annotations it is also annotated as a \textit{Location}. The distribution of the annotated entities in the training set is shown in Table \ref{tab:entity_distribution}.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lrr}
+        \toprule
+        \textbf{Entity Type} & \textbf{All} & \textbf{Nested} \\
+        \midrule
+        Location & 12{,}204 & 1{,}454 \\
+        Location deriv & 4{,}412 & 808 \\
+        Location part & 713 & 39 \\
+        \midrule
+        Person & 10{,}517 & 488 \\
+        Person deriv & 95 & 20 \\
+        Person part & 275 & 29 \\
+        \midrule
+        Organization & 7{,}182 & 281 \\
+        Organization deriv & 56 & 4 \\
+        Organization part & 1{,}077 & 9 \\
+        \midrule
+        Other & 4{,}047 & 57 \\
+        Other deriv & 294 & 3 \\
+        Other part & 252 & 2 \\
+        \midrule
+        \textbf{Total} & \textbf{41{,}124} & \textbf{3{,}194} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Distribution of entity types in the GermEval 2014 dataset (outer and nested annotations).}
+    \label{tab:entity_distribution}
+\end{table}
+
+However, for the purpose of this study, we only focus on the outermost entities and ignore the nested annotations. Concretely, only the primary annotation layer (outer entities) is retained, while the nested entity layer is not used. This choice reduces the task to a standard flat named entity recognition setting, where each token is assigned at most one entity label. This follows the more general application of transformer-based Named Entity Recognition, where other datasets often do not have the nested elements, such as the CoNLL-2003 dataset \cite{tjong_kim_sang_introduction_2003} used for example in English NER. \cite{kaur_bert-ner_2024}.
+
+% ---------- 6. APPROACH ----------
+\section{Approach}
+\subsection{Models}
+% Which pretrained checkpoints and why (small/base, mono/multi).
+For this study, we selected three transformer-based models that vary in size and purpose. All models were downloaded from the Hugging Face model hub. The models chosen are:
+\begin{itemize}
+    \item \textbf{bert-base-german-cased} \cite{bert_base_german_cased}: The German BERT base model is a transformer model published in 2019, pretrained on roughly 12GB of German text data, sensitive to cased input, and evaluated on various tasks including CONLL03, GermEval14, and GNAD. The model has 12 layers, each with 12 attention heads, the tokens are embedded into a 768-dimensional space, with the feed-forward layers having a dimensionality of 3072. The vocabulary size of the model is 30,000 tokens, leading to a total of around 110 million parameters.
+    \item \textbf{distilbert-base-german-cased} \cite{distilbert_base_german_cased}: DistilBERT is a compressed version of BERT trained through knowledge distillation, where a smaller student model is trained to match the behavior of a larger teacher model. The DistilBERT model has the same hidden dimensionality, feed-forward size, and number of attention heads as the BERT base model, but reduces the number of transformer layers from 12 to 6, resulting in a significantly smaller and faster model, while retaining the same width. The model uses a vocabulary of 31,102 tokens and contains approximately 67 million parameters.
+    \item \textbf{bert-base-multilingual-cased} \cite{bert_base_multilingual_cased}: The multilingual BERT base model is a transformer model released by Google, pretrained with a masked language modeling objective on the Wikipedias of 104 languages (including German), and is case sensitive. It follows the BERT-base architecture with 12 layers and 12 attention heads, a hidden size of 768 and a feed-forward size of 3072. Due to its much larger vocabulary (119{,}547 tokens), the model has approximately 179 million parameters.
+\end{itemize}
+
+\subsection{Training Strategies}
+% Frozen encoder vs full fine-tuning; last4 concat variant (if used).
+We use two different training strategies for fine-tuning all models on the GermEval14 dataset. In all cases, we add a token classification head as a linear layer on top of the transformer to predict the entity labels for each token. We then experiment with the following strategies for training:
+\begin{itemize}
+    \item \textbf{Full Fine-Tuning}: In this strategy, we train the entire model, including all transformer layers and the classification head, on the GermEval14 training set. This allows the model to adapt all its parameters to the specific NER task.
+    \item \textbf{Frozen Encoder}: In this strategy, we freeze all the transformer layers and only train the classification head on top. This means that the pre-trained weights of the transformer remain unchanged, and only the final layer is updated during training. This approach is computationally more efficient and requires less memory, as only the parameters of the classification head need to be stored and updated.
+\end{itemize}
+We also experiment with an additional variant where we concatenate the last four hidden layers of the transformer as input to the classification head, instead of just using the final layer's output. This approach needs a modification of the classification head to accommodate the increased input dimensionality, so its size is $4 * 768 = 3072$.
+
+The specific hyperparameter configurations for each strategy were selected based on a small grid search on the development set, as described in Section \ref{sec:Experimental Setup}.
+
+\subsection{Implementation Details}
+\paragraph{Label set and preprocessing}
+The label inventory is derived from the GermEval14 dataset by collecting all unique BIO tags (\texttt{ner\_tag}) across all dataset splits. A deterministic mapping between labels and numeric IDs (\texttt{label2id} / \texttt{id2label}) is created and passed to the model configuration to ensure consistent decoding and evaluation.
+
+\paragraph{Tokenization and label alignment}
+All models use their respective tokenizers via \texttt{AutoTokenizer}. Since the dataset provides word-level token sequences, tokenization is performed with \texttt{is\_split\_into\_words=True}, applying truncation and fixed-length padding up to a maximum sequence length of 128. Label alignment is implemented using the tokenizer's \texttt{word\_ids()} mapping: special tokens and padding positions are masked with the ignore index \texttt{-100}, while each subword token inherits the BIO label of its originating word. This ensures that loss and evaluation are computed only over valid token positions.
+
+\paragraph{Model setup}
+Models are instantiated using \texttt{AutoModelForTokenClassification}. Depending on the training strategy, either all model parameters are updated (full fine-tuning) or only the parameters of the token classification head are optimized while the transformer encoder is frozen.
+
+\paragraph{Training Loop}
+Training is implemented using the Hugging Face Trainer API, which provides a standardized training and evaluation loop for transformer models. Evaluation is performed at the end of each epoch on the development set. Final model performance is assessed on the test set; the evaluation metrics and protocol are described in detail in Section~\ref{sec:evaluation}.
+
+\ 
+% ---------- 7. EVALUATION ----------
+\section{Evaluation}
+\label{sec:evaluation}
+\subsection{Metrics}
+% P/R/F1 with seqeval (entity-level). Define what is measured.
+TODO
+
+\subsection{Evaluation Protocol}
+% Outer-only vs official combined metric; why you chose it.
+% Note on subword label propagation and the B/I effect (brief).
+TODO
+
+% ---------- 8. EXPERIMENTAL SETUP ----------
+\section{Experimental Setup}
+\label{sec:Experimental Setup}
+% Hyperparameters, epochs, batch size, LR, seed, hardware constraints, runtime logging.
+TODO
+
+
+% ---------- 9. RESULTS ----------
+\section{Results}
+% Tables only, minimal commentary.
+% Include: main table + maybe params + runtime.
+TODO
+
+% ---------- 10. DISCUSSION ----------
+\section{Discussion}
+% Interpret results, trade-offs, what surprised you, why mono vs multi behaves etc.
+TODO
+
+% ---------- 11. ERROR ANALYSIS ----------
+\section{Error Analysis}
+% Concrete examples + typical error categories + (optional) per-class breakdown.
+TODO
+
+% ---------- 12. LIMITATIONS ----------
+\section{Limitations}
+% Outer-only evaluation, nested not modeled, subword labeling choice, compute limits.
+TODO
+
+% ---------- 13. CONCLUSION + FUTURE WORK ----------
+\section{Conclusion and Future Work}
+% 5-8 sentences: recap + next steps.
+TODO
+
+% ---------- REFERENCES ----------
+\nocite{*}
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

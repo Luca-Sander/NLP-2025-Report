@@ -1,0 +1,42 @@
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.toc
+*.lot
+*.lof
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+*.dpth
+*.md5
+*.auxlock
+
+# LaTeX intermediate files
+*.bbl
+*.blg
+
+# Build directories
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Keep tracked files
+!*.tex
+!*.pdf
+!*.bib
