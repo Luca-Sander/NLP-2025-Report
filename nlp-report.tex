@@ -113,7 +113,7 @@ We use two different training strategies for fine-tuning all models on the GermE
 \end{itemize}
 We also experiment with an additional variant where we concatenate the last four hidden layers of the transformer as input to the classification head, instead of just using the final layer's output. This approach needs a modification of the classification head to accommodate the increased input dimensionality, so its size is $4 * 768 = 3072$.
 
-The specific hyperparameter configurations for each strategy were selected based on a small grid search on the development set, as described in Section \ref{sec:Experimental Setup}.
+The specific hyperparameter configurations for each strategy were selected based on a small grid search on the development set, as described in Section \ref{sec:experimental_setup}.
 
 \subsection{Implementation Details}
 \paragraph{Label set and preprocessing}
@@ -128,27 +128,79 @@ Models are instantiated using \texttt{AutoModelForTokenClassification}. Dependin
 \paragraph{Training Loop}
 Training is implemented using the Hugging Face Trainer API, which provides a standardized training and evaluation loop for transformer models. Evaluation is performed at the end of each epoch on the development set. Final model performance is assessed on the test set; the evaluation metrics and protocol are described in detail in Section~\ref{sec:evaluation}.
 
-\ 
 % ---------- 7. EVALUATION ----------
 \section{Evaluation}
 \label{sec:evaluation}
-\subsection{Metrics}
-% P/R/F1 with seqeval (entity-level). Define what is measured.
-In the original GermEval14 shared task, the authors defined $P_1$ and $G_1$ as sets of all "outer" NEs, and $P_2$ and $G_2$ as sets of all "inner" NEs. With these, they propose 4 different evaluation metrics:
+
+\subsection{Metrics (GermEval14)}
+Benikova et al.\cite{benikova_germeval_nodate} define four metrics for the shared task, but describe three main evaluation variants for nested NER. We summarize the three proposed metrics below.
+
+Let $P_1$ and $G_1$ be the predicted/gold sets of outer (first-level) named entity chunks, and $P_2$ and $G_2$ the predicted/gold sets of inner (second-level) chunks. \cite{benikova_germeval_nodate}
+
 \begin{itemize}
-    \item Strict, Combined Evaluation: 
+    \item \textbf{Metric 1: Strict, Combined Evaluation (official)}.
+    All markables across both levels are evaluated jointly, distinguishing all 12 labels (including \texttt{deriv} and \texttt{part} subtypes). A predicted chunk matches a gold chunk iff (i) label matches, (ii) span matches, and (iii) the level (outer vs.\ inner) matches:
+    $
+        P = P_1 \cup P_2,\quad G = G_1 \cup G_2,\quad
+        p == g \Leftrightarrow \text{label}(p)=\text{label}(g)\wedge \text{span}(p)=\text{span}(g)\wedge \text{level}(p)=\text{level}(g).
+    $
+    \item \textbf{Metric 2: Loose, Combined Evaluation}.
+    Same as Metric~1, but subtypes are collapsed (base label match is sufficient, e.g.\ \texttt{PER} matches \texttt{PERderiv}), while span and level must still match:
+    $
+        P = P_1 \cup P_2,\quad G = G_1 \cup G_2,\quad
+        p == g \Leftrightarrow \text{baseLabel}(p)=\text{baseLabel}(g)\wedge \text{span}(p)=\text{span}(g)\wedge \text{level}(p)=\text{level}(g).
+    $
+    \item \textbf{Metric 3: Strict, Separate Evaluation}.
+    Two separate strict evaluations are reported: one for outer entities ($P_1$ vs.\ $G_1$) and one for inner entities ($P_2$ vs.\ $G_2$), each using the traditional strict match definition (label + exact span). 
 \end{itemize}
 
-\subsection{Evaluation Protocol}
-% Outer-only vs official combined metric; why you chose it.
-% Note on subword label propagation and the B/I effect (brief).
-TODO
+\subsection{What we evaluate in this study}
+In our experiments we report:
+\begin{itemize}
+    \item \textbf{Entity-level Precision/Recall/F1} computed from predicted and gold chunks of the outer entities, using strict matching (label + exact span). This corresponds to Metric~3's outer evaluation only, focusing on the primary task of flat NER.
+    \item \textbf{Training Runtime} (wall-clock) for each experiment, to quantify efficiency trade-offs between model size and training strategy.
+    \item \textbf{Evaluation Runtime and Throughput} on the development/test set reported by the Hugging Face \texttt{Trainer} (\texttt{eval\_runtime}, \texttt{eval\_samples\_per\_second}, \texttt{eval\_steps\_per\_second}) as a proxy for inference efficiency under the evaluation pipeline.
+\end{itemize}
+
+\subsection{Evaluation protocol and outer-only choice}
+The GermEval dataset provides two annotation layers and the shared task evaluates both levels.
+However, in this study we only evaluate the outer entities and ignore the nested layer, as this would add complexity that is not central to the research questions.
+
+Concretely, we evaluate predicted chunks against $G_1$ (outer gold entities) and do not model nor score $G_2$ (inner entities). This choice is motivated by:
+\begin{itemize}
+    \item \textbf{Task alignment and comparability}: most widely used NER benchmarks - including the CoNLL-2003 dataset \cite{tjong_kim_sang_introduction_2003} - assume flat annotation; focusing on outer entities reduces GermEval to this standard setting.
+    \item \textbf{Modeling scope}: nested prediction introduces an additional structural requirement (two-level outputs) beyond plain sequence tagging; our experiments target the trade-off between model size and fine-tuning strategy under a standard token-classification setup.
+    \item \textbf{Data characteristics}: only a minority of entities are nested (about 7.8\% in the dataset statistics reported by the task paper), while inner entities show substantially lower performance in the shared task analysis, suggesting higher difficulty. \cite{benikova_germeval_nodate}
+\end{itemize}
 
 % ---------- 8. EXPERIMENTAL SETUP ----------
 \section{Experimental Setup}
-\label{sec:Experimental Setup}
-% Hyperparameters, epochs, batch size, LR, seed, hardware constraints, runtime logging.
-TODO
+\label{sec:experimental_setup}
+
+\subsection{Hardware and environment}
+All experiments were run on a single workstation equipped with an NVIDIA RTX 3080 GPU. Even though better hardware is available, the experiments still give insight into the relative efficiency of the models and training strategies.
+
+\subsection{Hyperparameter selection via small grid search}
+To ensure a fair and computationally feasible comparison across all six model configurations (three architectures $\times$ frozen vs.\ full fine-tuning), we performed a small but targeted hyperparameter search on a single reference model: bert-base-german-cased. We conducted the search separately for the two training regimes:\\
+(i) \textbf{Full fine-tuning} (encoder + classifier head trainable), and\\
+(ii) \textbf{Frozen encoder} (only the classifier head trainable).\\
+We did not perform hyperparameter tuning for the classification using a concatenation of the last 4 layers, as this would remove comparability between the configurations.
+
+To keep exploratory runs efficient, we trained on a reduced subset of 50\% of the training split while always evaluating on the full development set. For each candidate configuration, we trained for the specified number of epochs and selected the setting with the highest development F1-score (outer entities, strict matching as described in Section~\ref{sec:evaluation}). We additionally recorded wall-clock runtime to ensure the chosen settings were not only accurate but also practically feasible.
+
+\paragraph{Search space.}
+For full fine-tuning, we tested learning rates $\{2\times 10^{-5}, 3\times 10^{-5}, 5\times 10^{-5}\}$ and epochs $\{3,4,5\}$.
+For the frozen encoder regime, we tested higher learning rates - $\{3\times 10^{-4}, 5\times 10^{-4}, 1\times 10^{-3}, 2\times 10^{-3}\}$ - appropriate for training only a shallow head, and epochs in a slightly wider range - $\{5,8,10\}$ - to allow convergence under frozen representations.
+
+\paragraph{Selected hyperparameters.}
+We selected the following hyperparameters based on the grid search results:
+\begin{itemize}
+    \item \textbf{Full fine-tuning:} learning rate $3\times 10^{-5}$, $4$ epochs.
+    \item \textbf{Frozen encoder:} learning rate $2\times 10^{-3}$, $8$ epochs.
+\end{itemize}
+The full grid-search results are reported in Appendix~\ref{app:hyperparams} (Table~\ref{tab:hyperparams-full-list}). Even though the best results were achieved with 10 epochs in the frozen regime, we selected 8 epochs to limit runtime while still achieving near-optimal performance as the difference is only marginal.
+
+These hyperparameters were then used unchanged for all models within the corresponding training regime to preserve comparability between architectures and to avoid confounding results with per-model tuning.
 
 
 % ---------- 9. RESULTS ----------
@@ -181,5 +233,48 @@ TODO
 \nocite{*}
 \bibliographystyle{plainnat}
 \bibliography{references}
+
+% ---------- APPENDIX ----------
+\appendix
+
+\section{Hyperparameter Search Results}
+\label{app:hyperparams}
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+\textbf{Regime} & \textbf{LR} & \textbf{Epochs} & \textbf{Val Prec.} & \textbf{Val Rec.} & \textbf{Val F1} & \textbf{Runtime (min)} \\
+\midrule
+\multicolumn{7}{c}{\textbf{Full fine-tuning}}\\
+Full FT & $2\times10^{-5}$ & 3 & 0.8093 & 0.8316 & 0.8203 & 4.9 \\
+Full FT & $2\times10^{-5}$ & 4 & 0.8146 & 0.8341 & 0.8243 & 6.4 \\
+Full FT & $2\times10^{-5}$ & 5 & 0.8173 & 0.8433 & 0.8301 & 8.2 \\
+Full FT & $3\times10^{-5}$ & 3 & 0.8191 & 0.8453 & 0.8320 & 4.9 \\
+Full FT & $3\times10^{-5}$ & 4 & 0.8244 & 0.8456 & 0.8349 & 6.5 \\
+Full FT & $3\times10^{-5}$ & 5 & 0.8164 & 0.8385 & 0.8273 & 8.1 \\
+Full FT & $5\times10^{-5}$ & 3 & 0.8217 & 0.8396 & 0.8306 & 4.8 \\
+Full FT & $5\times10^{-5}$ & 4 & 0.8197 & 0.8312 & 0.8254 & 6.5 \\
+Full FT & $5\times10^{-5}$ & 5 & 0.8142 & 0.8349 & 0.8244 & 8.2 \\
+\midrule
+\multicolumn{7}{c}{\textbf{Frozen encoder}}\\
+Frozen & $3\times10^{-4}$ & 5  & 0.6473 & 0.6081 & 0.6271 & 3.3 \\
+Frozen & $3\times10^{-4}$ & 8  & 0.6578 & 0.6266 & 0.6418 & 5.5 \\
+Frozen & $3\times10^{-4}$ & 10 & 0.6572 & 0.6330 & 0.6449 & 6.8 \\
+Frozen & $5\times10^{-4}$ & 5  & 0.6528 & 0.6251 & 0.6387 & 3.5 \\
+Frozen & $5\times10^{-4}$ & 8  & 0.6675 & 0.6429 & 0.6549 & 5.6 \\
+Frozen & $5\times10^{-4}$ & 10 & 0.6665 & 0.6472 & 0.6567 & 6.7 \\
+Frozen & $1\times10^{-3}$ & 5  & 0.6657 & 0.6489 & 0.6572 & 3.1 \\
+Frozen & $1\times10^{-3}$ & 8  & 0.6746 & 0.6551 & 0.6647 & 5.0 \\
+Frozen & $1\times10^{-3}$ & 10 & 0.6725 & 0.6577 & 0.6650 & 6.2 \\
+Frozen & $2\times10^{-3}$ & 5  & 0.6671 & 0.6567 & 0.6619 & 3.3 \\
+Frozen & $2\times10^{-3}$ & 8  & \textbf{0.6758} & \textbf{0.6598} & \textbf{0.6677} & 5.1 \\
+Frozen & $2\times10^{-3}$ & 10 & 0.6743 & 0.6630 & 0.6686 & 6.3 \\
+\bottomrule
+\end{tabular}
+\caption{Grid-search results for the \texttt{bert-base-german-cased} reference model. Each row reports validation precision/recall/F1 (outer entities, strict matching) and runtime for one learning rate (LR) and epoch setting.}
+\label{tab:hyperparams-full-list}
+\end{table*}
 
 \end{document}
