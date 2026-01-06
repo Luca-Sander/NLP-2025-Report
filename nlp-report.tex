@@ -159,7 +159,7 @@ In our experiments we report:
 \begin{itemize}
     \item \textbf{Entity-level Precision/Recall/F1} computed from predicted and gold chunks of the outer entities, using strict matching (label + exact span). This corresponds to Metric~3's outer evaluation only, focusing on the primary task of flat NER.
     \item \textbf{Training Runtime} (wall-clock) for each experiment, to quantify efficiency trade-offs between model size and training strategy.
-    \item \textbf{Evaluation Runtime and Throughput} on the development/test set reported by the Hugging Face \texttt{Trainer} (\texttt{eval\_runtime}, \texttt{eval\_samples\_per\_second}, \texttt{eval\_steps\_per\_second}) as a proxy for inference efficiency under the evaluation pipeline.
+    \item \textbf{Inference Runtime} (wall-clock) on the test set, to assess practical deployment efficiency.
 \end{itemize}
 
 \subsection{Evaluation protocol and outer-only choice}
