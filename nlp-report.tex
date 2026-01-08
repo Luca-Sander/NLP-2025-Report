@@ -157,7 +157,8 @@ Let $P_1$ and $G_1$ be the predicted/gold sets of outer (first-level) named enti
 \subsection{What we evaluate in this study}
 In our experiments we report:
 \begin{itemize}
-    \item \textbf{Entity-level Precision/Recall/F1} computed from predicted and gold chunks of the outer entities, using strict matching (label + exact span). This corresponds to Metric~3's outer evaluation only, focusing on the primary task of flat NER.
+    \item \textbf{Entity-level Precision, Recall, and F1-score} computed from predicted and gold chunks of the outer entities using strict matching (exact span and label). We report micro-averaged scores as the primary metric for model comparison, corresponding to Metric~3's outer evaluation and focusing on the standard flat NER task. In addition, we compute per-class and macro-averaged scores for diagnostic analysis, which are reported in Appendix~\ref{app:per-class-results}.
+
     \item \textbf{Training Runtime} (wall-clock) for each experiment, to quantify efficiency trade-offs between model size and training strategy.
     \item \textbf{Inference Runtime} (GPU execution) on the test set, to assess practical deployment efficiency.
 \end{itemize}
@@ -207,7 +208,69 @@ These hyperparameters were then used unchanged for all models within the corresp
 \section{Results}
 % Tables only, minimal commentary.
 % Include: main table + maybe params + runtime.
-TODO
+In this section, we present the main results of our experiments. Unless stated otherwise, reported Precision, Recall, and F1-scores refer to micro-averaged entity-level results on outer entities only.
+We first report results for the full fine-tuning regime, followed by the frozen encoder regime.
+Finally, we present results for the last-4-layer concatenation variant.
+For readability, we refer to the models distilbert-base-german-cased,
+bert-base-german-cased, and bert-base-multilingual-cased
+as \emph{DistilBERT (DE)}, \emph{BERT (DE)}, and \emph{BERT (Multi)}, respectively, throughout this section.
+\subsection{Full Fine-tuning}
+We begin with the results obtained under the full fine-tuning regime.
+
+\subsubsection{Precision/Recall/F1-Score}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lrrr}
+        \toprule
+        \textbf{Model} & \textbf{Prec.} & \textbf{Rec.} & \textbf{F1} \\
+        \midrule
+        DistilBERT (DE) & 0.8169 & 0.8279 & 0.8224 \\
+        BERT (DE) & 0.8292 & 0.8383 & 0.8337 \\
+        BERT (Multi) & 0.8280 & 0.8336 & 0.8308 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Full fine-tuning results on the GermEval14 test set (outer entities, strict matching).}
+    \label{tab:full-finetuning-results}
+\end{table}
+
+TODO: EXPLAIN TABLE
+
+\subsubsection{Training Runtime}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lr}
+        \toprule
+        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \midrule
+        DistilBERT (DE) & 413 \\
+        BERT (DE) & 777 \\
+        BERT (Multi) & 842 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Full fine-tuning training runtime on the GermEval14 dataset.}
+    \label{tab:full-finetuning-runtime}
+\end{table}
+SOME text
+\subsubsection{Inference Time}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lr}
+        \toprule
+        \textbf{Model} & \textbf{Inference Time (s)} \\
+        \midrule
+        DistBERT German & 12.4 \\
+        BERT German & 15.6 \\
+        BERT Multilingual & 18.9 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Full fine-tuning inference time on the GermEval14 test set.}
+    \label{tab:full-finetuning-inference}
+\end{table}
+SOME text
+\subsection{Frozen Encoder}
+We now turn to the frozen encoder regime.
+
+\subsubsection{Precision/Recall/F1-Score}
 
 % ---------- 10. DISCUSSION ----------
 \section{Discussion}
@@ -235,14 +298,20 @@ TODO
 \bibliography{references}
 
 % ---------- APPENDIX ----------
+\clearpage
+\onecolumn
 \appendix
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
+
 
 \section{Hyperparameter Search Results}
 \label{app:hyperparams}
 
-\begin{table*}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llrrrrr@{}}
 \toprule
 \textbf{Regime} & \textbf{LR} & \textbf{Epochs} & \textbf{Val Prec.} & \textbf{Val Rec.} & \textbf{Val F1} & \textbf{Runtime (min)} \\
@@ -275,6 +344,11 @@ Frozen & $2\times10^{-3}$ & 10 & 0.6743 & 0.6630 & 0.6686 & 6.3 \\
 \end{tabular}
 \caption{Grid-search results for the \texttt{bert-base-german-cased} reference model. Each row reports validation precision/recall/F1 (outer entities, strict matching) and runtime for one learning rate (LR) and epoch setting.}
 \label{tab:hyperparams-full-list}
-\end{table*}
+\end{table}
+
+\section{Per-Class Results}
+\label{app:per-class-results}
+% Detailed per-class precision/recall/F1 tables for all models.
+TODO
 
 \end{document}
