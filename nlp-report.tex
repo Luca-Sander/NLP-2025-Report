@@ -8,6 +8,7 @@
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{booktabs}
+\usepackage{xurl}
 \usepackage[hidelinks]{hyperref}
 \usepackage[numbers]{natbib}
 \usepackage{placeins}
@@ -16,42 +17,104 @@
 
 % ---------- TITLE INFO ----------
 \title{Trade-off between Small and Large Transformers for German NER Fine-Tuning}
-\author{Luca Sander}
+
+\author{
+Luca Sander\\
+\small
+Technical Faculty, Bielefeld University, Germany\\
+\small
+Department of Computer Science and Engineering, University of Bologna, Italy\\
+\small
+\texttt{lucasander14@uni-bielefeld.de}\\
+\small
+\texttt{lucagunnar.sander@studio.unibo.it}
+}
+
 \date{\today}
 
 \begin{document}
 \maketitle
-
 % ---------- ABSTRACT ----------
 \begin{abstract}
-% Write this last.
-% - Task + motivation
-% - What you compare (models + frozen vs finetune + optional last4)
-% - Dataset + metric
-% - Main results + takeaway
-TODO
+Transformer-based models achieve state-of-the-art performance in named entity recognition, but their increasing size raises concerns regarding training and deployment efficiency.
+This work investigates the trade-offs between model size, training regime, and architectural design for German named entity recognition.
+We compare a distilled Transformer and two base-sized BERT variants under full fine-tuning and frozen encoder setups, and additionally evaluate a last-layer aggregation strategy based on concatenating the final four hidden layers.
+All experiments are conducted on the GermEval14 benchmark using strict, entity-level evaluation on outer entities.
+
+The results show that full fine-tuning consistently outperforms frozen encoder training across all models, with performance differences of approximately 8-12 F1 points.
+While base-sized models achieve the highest absolute F1-scores when fully fine-tuned, a compact model such as DistilBERT offers a particularly favorable efficiency-performance trade-off, clearly outperforming larger models trained with frozen encoders.
+Architectural extensions provide limited gains under restricted training but do not compensate for the absence of encoder-level adaptation.
+Overall, the findings highlight encoder adaptability as the primary driver of performance in German named entity recognition, outweighing model size alone.
 \end{abstract}
+
 
 % ---------- 1. INTRO ----------
 \section{Introduction}
-% Motivation, setting, contributions.
-TODO
+
+Named entity recognition (NER) is a core task in natural language processing that enables the extraction of structured information from unstructured text \cite{tjong_kim_sang_introduction_2003}.
+In recent years, Transformer-based encoders have become the dominant modeling paradigm for NER and other sequence labeling tasks due to their ability to learn rich contextual token representations \cite{vaswani_attention_2017}.
+However, these performance gains are often accompanied by increased computational cost, raising practical concerns regarding training efficiency and deployment.
+
+These concerns are particularly relevant for German NER, where evaluation relies on fine-grained label sets and strict span-based matching on benchmarks such as GermEval14 \cite{benikova_germeval_nodate}.
+As a result, competitive systems commonly employ pretrained Transformer encoders that are fully fine-tuned for the downstream task.
+While effective, this practice motivates the question of when smaller models or computationally cheaper training strategies can provide competitive alternatives.
+
+Recent work has introduced several pretrained Transformer language models specifically for German, demonstrating the benefits of language-specific pretraining but also highlighting the computational footprint of modern encoders \cite{scheible_gottbert_2024}.
+Despite this progress, systematic analyses that jointly examine model size, training regime, and lightweight architectural modifications for German NER - while also considering both training and inference efficiency - remain limited.
+
+In this work, we present a controlled empirical study of these trade-offs on the GermEval14 NER benchmark \cite{benikova_germeval_nodate}.
+We compare a distilled Transformer and two base-sized BERT models under full fine-tuning and frozen encoder setups, and additionally evaluate a last-layer aggregation variant based on concatenating the final four hidden layers.
+By jointly analyzing predictive performance together with training runtime and inference cost, this study aims to clarify which factors primarily drive effectiveness in practical German NER systems.
 
 % ---------- 2. PROBLEM + RESEARCH QUESTIONS ----------
 \section{Problem Statement and Research Questions}
-% Make it explicit what you test (efficiency, specialization, training depth).
-% Add 2-4 research questions + hypotheses.
-TODO
 
+Transformer-based models achieve strong performance in named entity recognition, but their effectiveness comes at a substantial computational cost.
+In practical settings, this raises the question of how model size, training regime, and lightweight architectural modifications jointly influence both predictive performance and efficiency.
+In particular, it is unclear to what extent full end-to-end fine-tuning is necessary for high-quality German NER, and whether smaller models or restricted training strategies can offer competitive trade-offs.
+
+This work addresses the following research questions:
+
+\begin{itemize}
+    \item \textbf{RQ1:} How does full fine-tuning compare to a frozen encoder regime in terms of NER performance and computational efficiency for German Transformer-based models?
+    \item \textbf{RQ2:} How does model size affect the performance-efficiency trade-off under different training regimes?
+    \item \textbf{RQ3:} Can lightweight architectural extensions, such as concatenating representations from multiple final layers, mitigate performance degradation under restricted training?
+\end{itemize}
+
+Based on prior findings in Transformer-based NER, we hypothesize that full fine-tuning will yield the highest performance across models, while smaller architectures will exhibit more favorable efficiency--performance trade-offs. Furthermore, architectural extensions are expected to provide limited improvements under frozen encoder setups but not fully compensate for the absence of encoder adaptation.
 % ---------- 3. BACKGROUND (SHORT) ----------
 \section{Background}
-% Keep concise: transformers, token classification, BIO, GermEval outer/inner.
-TODO
+
+\subsection{Transformer-based token classification}
+Modern NER systems commonly formulate the task as token-level classification using contextualized representations produced by a Transformer encoder \cite{vaswani_attention_2017}.
+For each input token, the encoder outputs a hidden representation that is mapped to label logits by a lightweight classification head and trained using cross-entropy loss.
+Entity spans are reconstructed using a tagging scheme such as BIO \cite{tjong_kim_sang_introduction_2003}.
+This setup has become the standard formulation for Transformer-based NER.
+
+\subsection{GermEval14 in historical context}
+The GermEval 2014 shared task predates the use of Transformer architectures and provides a useful reference point for historical NER performance on German.
+In the original shared task, the best-performing systems based on CRFs and feature-rich statistical models achieved an overall F1-score of 77.1 under the official strict evaluation metric, and 79.8 on first-level (outer) entities, with substantially lower performance on embedded entities \cite{benikova_germeval_nodate}.
+These results illustrate the difficulty of German NER prior to large-scale contextual pretraining.
+
+\subsection{German pretrained Transformer models}
+Recent years have seen the development of pretrained Transformer language models specifically for German, trained on orders of magnitude more unlabeled text than was available at the time of GermEval14.
+For example, Chan et al.\ pretrain German BERT-style models on up to 12 billion tokens of German text \cite{chan_germans_2020}.
+Similarly, GottBERT is a monolingual German RoBERTa-style model pretrained on approximately 145 GB of filtered German text from the OSCAR corpus \cite{scheible_gottbert_2024}.
+When evaluated on GermEval14, these models report F1-scores of approximately 88.3 (GottBERT-base) and 89.2 (GottBERT-large), demonstrating the impact of large-scale pretraining on German NER performance \cite{scheible_gottbert_2024}.
 
 % ---------- 4. RELATED WORK ----------
 \section{Related Work}
-% 3-6 citations: GermEval14, transformer NER for German, efficiency tradeoffs.
-TODO
+
+Early work on named entity recognition relied on feature-based statistical models such as conditional random fields, as exemplified by the CoNLL-2003 shared task \cite{tjong_kim_sang_introduction_2003}.
+With the advent of pretrained Transformer encoders, NER performance improved substantially by fine-tuning contextual representations with token classification heads \cite{kaur_bert-ner_2024}.
+Most existing studies focus primarily on maximizing predictive performance and assume full end-to-end fine-tuning.
+
+For German, several monolingual and multilingual pretrained Transformer models have been proposed, showing consistent improvements over earlier approaches and multilingual baselines \cite{chan_germans_2020,scheible_gottbert_2024}.
+However, evaluations of these models typically rely on full fine-tuning and do not systematically examine alternative training regimes, such as frozen encoders, or analyze training and inference efficiency.
+
+A smaller body of work considers efficiency-oriented modeling choices, including reduced model sizes or constrained parameter updates.
+Nevertheless, for German NER in particular, there is a lack of controlled empirical studies that jointly analyze model size, training regime, and lightweight architectural modifications while explicitly reporting computational cost.
+The present work addresses this gap by providing a systematic comparison of these factors on GermEval14.
 
 % ---------- 5. DATA ----------
 \section{Dataset}
@@ -62,7 +125,7 @@ The dataset we use in this study is the GermEval 2014 NER dataset \cite{germeval
     \item Development set: 2,200 sentences
     \item Test set: 5,100 sentences
 \end{itemize}
-The dataset includes annotations for 4 main entity types: \textit{Person}, \textit{Organization}, \textit{Location}, and \textit{Other}. Each entity type also has subtypes, namely \textit{part} and \textit{deriv}, which leads to a total of 12 distict entity labels. The dataset also uses nested annotations, meaning that entities can be contained within other entities. An example of that would be \textit{"FC BAYERN MUNICH"}, where \textit{"MUNICH"} is firstly annotated as an \textit{Organization}, but in a nested annotations it is also annotated as a \textit{Location}. The distribution of the annotated entities in the training set is shown in Table \ref{tab:entity_distribution}.
+The dataset includes annotations for 4 main entity types: \textit{Person}, \textit{Organization}, \textit{Location}, and \textit{Other}. Each entity type also has subtypes, namely \textit{part} and \textit{deriv}, which leads to a total of 12 distinct entity labels. The dataset also uses nested annotations, meaning that entities can be contained within other entities. An example is a sports club name that contains a location token, where the full span is annotated as an organization while a sub-span inside it is annotated as a location. The distribution of the annotated entities in the training set is shown in Table \ref{tab:entity_distribution}.
 \begin{table}[h]
     \centering
     \begin{tabular}{lrr}
@@ -100,7 +163,7 @@ However, for the purpose of this study, we only focus on the outermost entities 
 % Which pretrained checkpoints and why (small/base, mono/multi).
 For this study, we selected three transformer-based models that vary in size and purpose. All models were downloaded from the Hugging Face model hub. The models chosen are:
 \begin{itemize}
-    \item \textbf{bert-base-german-cased} \cite{bert_base_german_cased}: The German BERT base model is a transformer model published in 2019, pretrained on roughly 12GB of German text data, sensitive to cased input, and evaluated on various tasks including CONLL03, GermEval14, and GNAD. The model has 12 layers, each with 12 attention heads, the tokens are embedded into a 768-dimensional space, with the feed-forward layers having a dimensionality of 3072. The vocabulary size of the model is 30,000 tokens, leading to a total of around 110 million parameters.
+    \item \textbf{bert-base-german-cased} \cite{bert_base_german_cased}: The German BERT base model is a transformer model published in 2019, pretrained on roughly 12GB of German text data, case-sensitive input, and evaluated on various tasks including CONLL03, GermEval14, and GNAD. The model has 12 layers, each with 12 attention heads, the tokens are embedded into a 768-dimensional space, with the feed-forward layers having a dimensionality of 3072. The vocabulary size of the model is 30,000 tokens, leading to a total of around 110 million parameters.
     \item \textbf{distilbert-base-german-cased} \cite{distilbert_base_german_cased}: DistilBERT is a compressed version of BERT trained through knowledge distillation, where a smaller student model is trained to match the behavior of a larger teacher model. The DistilBERT model has the same hidden dimensionality, feed-forward size, and number of attention heads as the BERT base model, but reduces the number of transformer layers from 12 to 6, resulting in a significantly smaller and faster model, while retaining the same width. The model uses a vocabulary of 31,102 tokens and contains approximately 67 million parameters.
     \item \textbf{bert-base-multilingual-cased} \cite{bert_base_multilingual_cased}: The multilingual BERT base model is a transformer model released by Google, pretrained with a masked language modeling objective on the Wikipedias of 104 languages (including German), and is case sensitive. It follows the BERT-base architecture with 12 layers and 12 attention heads, a hidden size of 768 and a feed-forward size of 3072. Due to its much larger vocabulary (119{,}547 tokens), the model has approximately 179 million parameters.
 \end{itemize}
@@ -167,6 +230,9 @@ In our experiments we report:
     \item \textbf{Inference Runtime} (GPU execution) on the test set, to assess practical deployment efficiency.
 \end{itemize}
 
+Entity-level scores are computed by decoding BIO tag sequences into entity spans using standard BIO chunk extraction (as implemented by \texttt{seqeval}) and then applying strict matching against gold spans (exact label and exact span).
+Inference runtime is measured on the full test set with the model in evaluation mode (\texttt{model.eval()}) under \texttt{torch.inference\_mode()} using pre-tokenized inputs (tokenization excluded). On GPU, inference runtime is measured on the tokenized test set using CUDA events with synchronization before and after the measured region (batch size 16).
+
 \subsection{Evaluation protocol and outer-only choice}
 The GermEval dataset provides two annotation layers and the shared task evaluates both levels.
 However, in this study we only evaluate the outer entities and ignore the nested layer, as this would add complexity that is not central to the research questions.
@@ -189,7 +255,7 @@ All experiments were run on a single workstation equipped with an NVIDIA RTX 308
 To ensure a fair and computationally feasible comparison across all twelve model configurations (three architectures $\times$ frozen vs.\ full fine-tuning $\times$ last layer vs. last-4-concatenation), we performed a small but targeted hyperparameter search on a single reference model: bert-base-german-cased. We conducted the search separately for the two training regimes:\\
 (i) \textbf{Full fine-tuning} (encoder + classifier head trainable), and\\
 (ii) \textbf{Frozen encoder} (only the classifier head trainable).\\
-We did not perform hyperparameter tuning for the classification using a concatenation of the last 4 layers, as this would remove comparability between the configurations.
+To preserve comparability across configurations, we tuned hyperparameters only for the standard head and reused these settings for the last-4 concatenation variant.
 
 To keep exploratory runs efficient, we trained on a reduced subset of 50\% of the training split while always evaluating on the full development set. For each candidate configuration, we trained for the specified number of epochs and selected the setting with the highest development F1-score (outer entities, strict matching as described in Section~\ref{sec:evaluation}). We additionally recorded wall-clock runtime to ensure the chosen settings were not only accurate but also practically feasible.
 
@@ -207,12 +273,18 @@ The full grid-search results are reported in Appendix~\ref{app:hyperparams} (Tab
 
 These hyperparameters were then used unchanged for all models within the corresponding training regime to preserve comparability between architectures and to avoid confounding results with per-model tuning.
 
+\subsection{Training configuration and reproducibility}
+Unless stated otherwise, all experiments use a maximum sequence length of 128 with truncation and fixed-length padding, a batch size of 16, weight decay of 0.01, and a fixed random seed of 42.
+Training is performed with the Hugging Face \texttt{Trainer} using AdamW optimization and evaluation on the development set after each epoch (\texttt{eval\_strategy="epoch"}).
+We do not apply early stopping.
+For each run, we report test-set results obtained from the final checkpoint after the configured number of epochs (i.e., we do not select a model based on development performance).
+
+
 
 % ---------- 9. RESULTS ----------
 \section{Results}
-% Tables only, minimal commentary.
 % Include: main table + maybe params + runtime.
-In this section, we present the main results of our experiments. Unless stated otherwise, reported Precision, Recall, and F1-scores refer to micro-averaged entity-level results on outer entities only.
+In this section, we present the main results of our experiments. Unless stated otherwise, reported Precision, Recall, and F1-scores refer to micro-averaged entity-level results on outer entities only, using strict span and label matching.
 We first report results for the full fine-tuning regime, followed by the frozen encoder regime.
 Finally, we present results for the last-4-layer concatenation variant.
 For readability, we refer to the models distilbert-base-german-cased,
@@ -238,28 +310,30 @@ We begin with the results obtained under the full fine-tuning regime.
 \end{table}
 
 Table~\ref{tab:full-finetuning-results} reports Precision, Recall, and F1-scores for all three models under the full fine-tuning regime.
-BERT (DE) achieves the highest F1-score (0.8337), followed closely by BERT (Multi) (0.8308), while DistilBERT (DE) attains an F1-score of 0.8224.
-Overall, the distilled model performs approximately 1.1 F1 points below the base-sized models in this setting. The multilingual model slightly underperforms the German-specific BERT, although the difference is marginal.
+BERT (Multi) achieves the highest F1-score (0.8637), followed closely by BERT (DE) (0.8610), while DistilBERT (DE) attains an F1-score of 0.8482.
+Overall, the distilled model performs approximately 1.5 F1 points below the base-sized models in this setting. The multilingual model slightly outperforms the German-specific BERT, although the difference is marginal.
 
 \subsubsection{Training Runtime}
 \begin{table}[h]
     \centering
-    \begin{tabular}{lr}
+    \begin{tabular}{lrr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} & \textbf{Sec/Epoch} \\
         \midrule
-        DistilBERT (DE) & 409 \\
-        BERT (DE) & 791 \\
-        BERT (Multi) & 836 \\
+        DistilBERT (DE) & 409 & 102\\
+        BERT (DE) & 791 & 198\\
+        BERT (Multi) & 836 & 209\\
         \bottomrule
     \end{tabular}
-    \caption{Full fine-tuning training runtime on the GermEval14 dataset.}
+    \caption{Full fine-tuning training runtime on the GermEval14 dataset (4 epochs).}
     \label{tab:full-finetuning-runtime}
 \end{table}
 
 Training runtimes under full fine-tuning are summarized in Table~\ref{tab:full-finetuning-runtime}.
-DistilBERT (DE) exhibits the shortest training time (413 seconds), followed by BERT (DE) (777 seconds) and BERT (Multi) (842 seconds).
-Overall, the distilled model requires roughly half the training time of the base-sized models, while the multilingual model incurs a modest additional cost compared to the German-specific BERT.
+DistilBERT (DE) exhibits the shortest training time (409 seconds), followed by BERT (DE) (791 seconds) and BERT (Multi) (836 seconds).
+Overall, the distilled model requires roughly half the training time of the base-sized models, while the multilingual model incurs a modest additional computational cost compared to the German-specific BERT.
+Full fine-tuning experiments were run for 4 epochs, whereas frozen encoder experiments were run for 10 epochs following the hyperparameter selection procedure; the Sec/Epoch column therefore reports normalized per-epoch training time within each regime.
+
 \subsubsection{Inference Time}
 \begin{table}[h]
     \centering
@@ -276,8 +350,9 @@ Overall, the distilled model requires roughly half the training time of the base
     \label{tab:full-finetuning-inference}
 \end{table}
 Inference runtimes for the full fine-tuning models are presented in Table~\ref{tab:full-finetuning-inference}.
-DistilBERT (DE) achieves the fastest inference time (3.70 seconds), while BERT (Multi) (6.78 seconds) outperforms BERT (DE) (8.07 seconds) in this regard. 
+DistilBERT (DE) achieves the fastest inference time (5.39 seconds), while BERT (Multi) (11.42 seconds) outperforms BERT (DE) (12.26 seconds) in this regard. 
 \subsection{Frozen Encoder}
+\FloatBarrier
 We now turn to the frozen encoder regime.
 \subsubsection{Precision/Recall/F1-Score}
 \begin{table}[h]
@@ -295,25 +370,51 @@ We now turn to the frozen encoder regime.
     \label{tab:frozen-encoder-results}
 \end{table}
 
-Training results for the frozen encoder regime are summarized in Table~\ref{tab:frozen-encoder-results}. Here, DistilBERT (DE) achieves the highest F1-score (0.6893), followed by BERT (DE) (0.6677) and BERT (Multi) (0.6607). Overall, the performance drop compared to full fine-tuning is substantial across all models, with F1-scores decreasing by approximately 13-17 points. BERT (DE) maintains a slight advantage over BERT (Multi).
+Test results for the frozen encoder regime are summarized in Table~\ref{tab:frozen-encoder-results}. Here, DistilBERT (DE) achieves the highest F1-score (0.7627), followed by BERT (DE) (0.7539) and BERT (Multi) (0.7469). Overall, the performance drop compared to full fine-tuning is substantial across all models, with F1-scores decreasing by approximately 8-12 points. BERT (DE) has a slight advantage over BERT (Multi) in the frozen encoder setting.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/Improvement-Frozen-Full-Finetuning.pdf}
+  \caption{Change in F1-score when moving from a frozen encoder to full fine-tuning across models. All architectures exhibit a substantial performance increase, with larger models being more strongly affected.}
+  \label{fig:f1-drop-frozen}
+\end{figure}
+
+Figure~\ref{fig:f1-drop-frozen} highlights the substantial performance increase introduced by full fine-tuning compared to freezing the encoder.
+
+\FloatBarrier
 
 \subsubsection{Training Runtime}
 \begin{table}[h]
     \centering
-    \begin{tabular}{lr}
+    \begin{tabular}{lrr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} & \textbf{Sec/Epoch} \\
         \midrule
-        DistilBERT (DE) & 366 \\
-        BERT (DE) & 691 \\
-        BERT (Multi) & 727 \\
+        DistilBERT (DE) & 366 & 36.6\\
+        BERT (DE) & 691 & 69.1\\
+        BERT (Multi) & 727 & 72.7\\
         \bottomrule
     \end{tabular}
-    \caption{Frozen encoder training runtime on the GermEval14 dataset.}
+    \caption{Frozen encoder training runtime on the GermEval14 dataset (10 epochs).}
     \label{tab:frozen-encoder-runtime}
 \end{table}
 
-Table~\ref{tab:frozen-encoder-runtime} presents training runtimes for the frozen encoder models. Compared to full fine-tuning, training times are reduced across all models, with DistilBERT (DE) requiring 120 seconds less - a 29\% reduction -, while BERT (DE) and BERT (Multi) see reductions of 172 seconds (22\%) and 248 seconds (29\%), respectively.
+Table~\ref{tab:frozen-encoder-runtime} reports training runtimes for the frozen encoder models.
+In absolute terms, frozen encoder training remains faster across all models despite being run for more epochs in this experimental setup.
+Compared to full fine-tuning (4 epochs), DistilBERT (DE) requires 43 seconds less total training time, corresponding to a reduction of approximately 10\%, while BERT (DE) and BERT (Multi) show reductions of 100 seconds (13\%) and 109 seconds (13\%), respectively, even though the frozen encoder experiments were run for 10 epochs.
+
+Under the per-epoch normalization, frozen encoder training is considerably more efficient, with per-epoch runtime reductions of approximately 65\% across all models.
+DistilBERT (DE) requires 36.6 seconds per epoch compared to 102 seconds under full fine-tuning, corresponding to a reduction of approximately 65\%.
+Similarly, BERT (DE) and BERT (Multi) require 69.1 and 72.7 seconds per epoch, respectively, compared to 198 and 209 seconds under full fine-tuning, yielding per-epoch reductions of about 65\% in both cases.
+
+Figure~\ref{fig:tradeoff-training-f1} illustrates the trade-off between training efficiency and predictive performance across models.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/Tradeoff-TrainingTime-F1-Score.pdf}
+  \caption{Trade-off between training runtime and F1-score on GermEval14 (outer entities, strict matching).}
+  \label{fig:tradeoff-training-f1}
+\end{figure}
 
 \subsubsection{Inference Time}
 \begin{table}[h]
@@ -331,7 +432,19 @@ Table~\ref{tab:frozen-encoder-runtime} presents training runtimes for the frozen
     \label{tab:frozen-encoder-inference}
 \end{table}
 
-Inference runtimes for the frozen encoder models are shown in Table~\ref{tab:frozen-encoder-inference}. Compared to full fine-tuning, inference times are slightly increased for DistilBERT (DE) (4.15 seconds vs.\ 3.70 seconds), while BERT (DE) and BERT (Multi) see minor decreases (6.59 seconds vs.\ 8.07 seconds and 6.70 seconds vs.\ 6.78 seconds, respectively). Overall, inference times remain comparable across training regimes.
+Inference runtimes for the frozen encoder models are shown in Table~\ref{tab:frozen-encoder-inference}. Compared to full fine-tuning, inference times are slightly increased for DistilBERT (DE) (5.82 seconds vs.\ 5.39 seconds) and BERT (Multi) (11.64 seconds vs.\ 11.42 seconds), while BERT (DE) sees a minor decrease (11.54 seconds vs.\ 12.26 seconds, respectively). Overall, inference times remain comparable across training regimes.
+
+As shown in Figure~\ref{fig:tradeoff-inference-f1}, inference runtimes are largely independent of the training regime.
+
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{figures/Tradeoff-InferenceTime-F1-Score.pdf}
+  \caption{Inference time versus F1-score for full fine-tuning and frozen encoder models. Inference runtimes remain largely unaffected by the training regime, with DistilBERT providing the fastest inference.}
+  \label{fig:tradeoff-inference-f1}
+\end{figure}
+
+\FloatBarrier
 
 \subsection{Last-4-Layer Concatenation}
 
@@ -353,7 +466,7 @@ Below we present results for the variant where the last four hidden layers of th
     \label{tab:last4-full-finetuning-results}
 \end{table}
 
-Table~\ref{tab:last4-full-finetuning-results} summarizes the results for the last-4-layer concatenation variant under full fine-tuning. BERT (DE) achieves the highest F1-score (0.8355), followed by BERT (Multi) (0.8323) and DistilBERT (DE) (0.8197). Compared to the standard full fine-tuning results, BERT (DE) and BERT (Multi) see slight improvements in F1-score, while DistilBERT (DE) experiences a minor decrease, but overall the differences are marginal.
+Table~\ref{tab:last4-full-finetuning-results} summarizes the results for the last-4-layer concatenation variant under full fine-tuning. BERT (Multi) achieves the highest F1-score (0.8624), followed by BERT (DE) (0.8581) and DistilBERT (DE) (0.8481). Compared to the standard full fine-tuning results, all models see minimal decreases in F1-score, with reductions of less than 0.3 points. This suggests that concatenating the last four layers does not provide significant benefits when the encoder is fully fine-tuned.
 
 \subsubsection{Frozen Encoder}
 \begin{table}[h]
@@ -371,10 +484,11 @@ Table~\ref{tab:last4-full-finetuning-results} summarizes the results for the las
     \label{tab:last4-frozen-encoder-results}
 \end{table}
 
-The results for the last-4-layer concatenation variant under the frozen encoder regime are presented in Table~\ref{tab:last4-frozen-encoder-results}. The highest F1-score is achieved by DistilBERT (DE) (0.7326), followed by BERT (Multi) (0.7318) and BERT (DE) (0.7122). Compared to the standard frozen encoder results, all models see notable improvements in F1-score, with increases of approximately 5-7 points. However, compared to full fine-tuning, performance remains substantially lower.
+The results for the last-4-layer concatenation variant under the frozen encoder regime are presented in Table~\ref{tab:last4-frozen-encoder-results}. The highest F1-score is achieved by BERT (Multi) (0.7950), followed by DistilBERT (DE) (0.7850) and BERT (DE) (0.7714). Compared to the standard frozen encoder results, all models see notable improvements in F1-score, especially the BERT (Multi) model, with increases of about 1.8–4.8 points. However, compared to full fine-tuning, performance remains substantially lower.
 \paragraph{Note on variability.}
 
 Small deviations from expected trends may in part be attributed to stochastic effects inherent in neural network training, including random initialization and optimization noise. As all experiments were conducted using a single random seed, minor fluctuations in relative performance should be interpreted with caution.
+Accordingly, small differences in absolute F1-scores between models within the same training regime should not be over-interpreted.
 
 % ---------- 10. DISCUSSION ----------
 \section{Discussion}
@@ -382,10 +496,16 @@ Small deviations from expected trends may in part be attributed to stochastic ef
 This section discusses the observed performance and efficiency differences across training regimes, model sizes, and architectural variants, with a particular focus on how these differences relate to properties of the Transformer architecture and training dynamics.
 
 \paragraph{Effect of training regime.}
-Across all evaluated models, full fine-tuning substantially outperforms the frozen encoder regime, with F1-score reductions of approximately 13--17 points when freezing the encoder. This indicates that task-specific adaptation of contextual representations is critical for high-quality German NER. When the encoder is frozen, only the classification head can adapt to the task, limiting the model’s ability to refine token-level representations and boundary decisions. As a result, even large pretrained encoders are unable to fully compensate for the lack of encoder-level adaptation.
+Across all evaluated models, full fine-tuning substantially outperforms the frozen encoder regime, with F1-score reductions of approximately 8-12 points when freezing the encoder. This indicates that task-specific adaptation of contextual representations is critical for high-quality German NER. When the encoder is frozen, only the classification head can adapt to the task, limiting the model’s ability to refine token-level representations and boundary decisions. As a result, even large pretrained encoders are unable to fully compensate for the lack of encoder-level adaptation.
 
 \paragraph{Training runtime and parameter updates.}
-Freezing the encoder leads to a consistent reduction in training runtime across all models, which can be attributed to the reduced number of trainable parameters and the elimination of backpropagation through the encoder layers. While the forward pass remains unchanged, the backward pass and optimizer updates are restricted to the classification head, resulting in lower computational cost per training step. The relative reduction is particularly pronounced for DistilBERT, where the encoder already has fewer layers and the remaining training cost is dominated by the classifier, leading to a larger proportional runtime decrease. Between the two base-sized models, BERT (Multi) exhibits slightly longer training times than BERT (DE), while inference runtimes remain comparable, reflecting their identical architectural depth and similar forward-pass computational complexity, with differences in vocabulary size having negligible impact on runtime compared to sequence length and hidden dimensionality.
+Freezing the encoder leads to a large reduction in training runtime per epoch across all models, and in our setup even results in lower total training time despite the frozen encoder runs using more epochs (10 vs.\ 4).
+Because the forward pass remains unchanged but backpropagation is limited to the classification head, encoder freezing removes most gradient computations and optimizer updates in the transformer stack.
+When normalized per epoch, this yields a consistent speed-up of roughly 65\% across all three architectures.
+While the relative reduction is similar, the absolute time saved per epoch is larger for the base-sized BERT models (about 129-136 seconds per epoch) than for DistilBERT (about 65 seconds per epoch), reflecting the higher computational cost of backpropagating through deeper encoders.
+Between BERT (DE) and BERT (Multi), training times are slightly higher for the multilingual model, whereas inference times remain comparable due to identical encoder depth and width; vocabulary-size differences mainly affect the embedding layer and have a minor impact relative to sequence length and hidden dimensionality.
+
+
 
 \paragraph{Inference time behavior.}
 Inference times are largely determined by the forward pass through the encoder and are therefore mostly independent of the training regime. This explains why inference runtimes remain comparable between full fine-tuning and frozen encoder setups. Furthermore, the similar inference times observed for BERT (DE) and BERT (Multi) can be explained by their identical architectural depth and hidden dimensionality, resulting in comparable computational complexity per input sequence. In contrast, DistilBERT achieves substantially faster inference due to its reduced number of layers, despite sharing the same hidden size.
@@ -394,15 +514,18 @@ Inference times are largely determined by the forward pass through the encoder a
 Although DistilBERT exhibits a modest performance gap compared to base-sized models under full fine-tuning, this gap remains relatively small when contrasted with the significant gains in training and inference efficiency. Notably, a fully fine-tuned DistilBERT clearly outperforms a frozen encoder setup using a larger BERT model, highlighting that adapting a smaller model end-to-end is more effective than relying on a larger but non-adaptive encoder. This suggests that, under constrained computational budgets, fine-tuning a compact Transformer may be a more effective strategy than freezing a larger architecture.
 
 \paragraph{Impact of last-4-layer concatenation.}
-Concatenating the last four hidden layers consistently improves performance under the frozen encoder regime and yields small gains for base-sized models under full fine-tuning. This indicates that exposing the classifier to representations from multiple abstraction levels can partially mitigate the loss of encoder adaptation by providing richer contextual signals. However, the observed improvements remain limited and do not close the performance gap to full fine-tuning, suggesting that architectural modifications alone cannot fully replace encoder-level learning.
+Concatenating the last four hidden layers consistently improves performance under the frozen encoder regime, but does not yield any gains for base-sized models under full fine-tuning. This indicates that exposing the classifier to representations from multiple abstraction levels can partially mitigate the loss of encoder adaptation by providing richer contextual signals. However, the observed improvements remain limited and do not close the performance gap to full fine-tuning, suggesting that architectural modifications alone cannot fully replace encoder-level learning.
 
 \paragraph{Summary.}
-Overall, the results demonstrate that performance in German NER is primarily driven by encoder adaptability rather than model size alone. While larger models provide higher absolute performance when fully fine-tuned, smaller models such as DistilBERT offer a strong efficiency--performance trade-off and benefit disproportionately from end-to-end fine-tuning. Lightweight architectural extensions, such as last-4-layer concatenation, can improve robustness in restricted training settings but remain secondary to full encoder adaptation.
+Overall, the results demonstrate that performance in German NER is primarily driven by encoder adaptability rather than model size alone, particularly for fine-grained entity distinctions. While larger models provide higher absolute performance when fully fine-tuned, smaller models such as DistilBERT offer a strong efficiency--performance trade-off and benefit disproportionately from end-to-end fine-tuning. Lightweight architectural extensions, such as last-4-layer concatenation, can improve robustness in restricted training settings but remain secondary to full encoder adaptation.
 
 % ---------- 11. ERROR ANALYSIS ----------
 \section{Error Analysis}
 
-To better understand where performance differences originate, we analyze per-class behavior using classification reports. Since GermEval14 contains several closely related labels (e.g., base entities, derived forms, and part entities), we aggregate per-class F1-scores into three semantically motivated groups: base entities (LOC/ORG/PER/OTH), derived entities (*deriv), and part entities (*part). Tables~\ref{tab:error-grouped-full} and \ref{tab:error-grouped-frozen} report support-weighted grouped F1-scores for the full fine-tuning and frozen encoder regimes, respectively. Full per-class reports for all configurations are provided in Appendix~\ref{app:per-class-results}.
+To better understand the origin of performance differences, we analyze per-class behavior using classification reports.
+Since GermEval14 contains several closely related labels (e.g., base entities, derived forms, and part entities), we aggregate per-class F1-scores into three semantically motivated groups: base entities (LOC/ORG/PER/OTH), derived entities (*deriv), and part entities (*part).
+Tables~\ref{tab:error-grouped-full} and~\ref{tab:error-grouped-frozen} report support-weighted grouped F1-scores for the full fine-tuning and frozen encoder regimes, respectively.
+Full per-class results for all configurations are provided in Appendix~\ref{app:per-class-results}.
 
 \begin{table}[h]
 \centering
@@ -437,34 +560,58 @@ BERT (Multi)    & 0.752 & 0.770 & 0.516 \\
 \label{tab:error-grouped-frozen}
 \end{table}
 
-
-
 \paragraph{Base vs.\ part entities.}
-Across all models, base entities achieve substantially higher F1-scores than part entities. Under full fine-tuning, base entities are strong for all models (around 0.84-0.86), whereas part entities remain considerably harder (around 0.66-0.69). Under frozen encoders, this gap widens: base entity performance drops to roughly 0.67-0.70, while part entities degrade most severely (roughly 0.37-0.44). This suggests that resolving part labels relies more heavily on task-specific adaptation and fine-grained contextual cues (e.g., boundary decisions and compositional patterns) than recognizing core entity types.
+Across all models and training regimes, base entities are substantially easier to recognize than part entities.
+Under full fine-tuning (Table~\ref{tab:error-grouped-full}), base entities achieve high and stable F1-scores across models (0.86-0.88), whereas part entities remain considerably harder (0.64-0.70).
+Under the frozen encoder regime (Table~\ref{tab:error-grouped-frozen}), this gap widens further: base entity performance drops to approximately 0.75-0.77, while part entities degrade most severely (0.52-0.58).
+This pattern suggests that accurate recognition of part entities relies more strongly on task-specific encoder adaptation, likely due to their dependence on fine-grained boundary decisions and compositional context.
 
 \paragraph{Derived entities and rarity effects.}
-Derived entities perform closer to base entities than part entities in both regimes, and under encoder freezing (Table~\ref{tab:error-grouped-frozen}) they have an even higher F1-score compared to the base entities. However, this aggregate hides strong label-frequency effects: extremely rare categories such as ORGderiv are consistently near-zero, indicating that data scarcity can dominate performance regardless of model size. In contrast, more frequent derived classes (e.g., LOCderiv) remain comparatively well handled.
+Derived entities consistently perform closer to base entities than part entities in both regimes.
+Under full fine-tuning, derived entity F1-scores are comparable to or slightly below base entity performance across models.
+Under frozen encoders, derived entities remain relatively robust and, for some models, even outperform base entities in aggregate.
+However, this grouped view masks strong frequency effects: extremely rare categories such as ORGderiv remain near-zero across all settings, indicating that data sparsity dominates performance regardless of model capacity or training regime.
+In contrast, frequent derived classes such as LOCderiv are handled reliably, contributing disproportionately to the aggregated derived scores.
 
 \paragraph{Impact of training regime on error patterns.}
-Comparing Tables~\ref{tab:error-grouped-full} and \ref{tab:error-grouped-frozen} shows that freezing the encoder disproportionately harms the most fine-grained distinctions, particularly the *part classes. This aligns with the overall regime-level results: restricting learning to the classification head limits the model’s ability to adapt token representations needed for subtle distinctions, whereas full fine-tuning improves both boundary sensitivity and label separability.
+Comparing Tables~\ref{tab:error-grouped-full} and~\ref{tab:error-grouped-frozen} highlights that freezing the encoder disproportionately harms the most fine-grained distinctions, particularly part entities.
+While all groups experience performance degradation under encoder freezing, the relative drop is largest for part entities.
+This aligns with the regime-level results and supports the interpretation that restricting learning to the classification head limits the model’s ability to adapt token representations required for subtle structural distinctions, whereas full fine-tuning improves both boundary sensitivity and label separability.
 
 \paragraph{Model differences.}
-Under full fine-tuning, base-sized models slightly outperform DistilBERT for the more challenging groups, especially part entities (Table~\ref{tab:error-grouped-full}). Under frozen encoders, DistilBERT exhibits stronger grouped performance on base and derived entities than the base-sized models, but part entities remain weak across all models. Overall, the grouped analysis supports the conclusion that encoder adaptability is the key driver of improvements for the hard classes.
+Under full fine-tuning, base-sized models slightly outperform DistilBERT on the more challenging groups, particularly part entities, reflecting the benefit of increased model capacity.
+Under the frozen encoder regime, DistilBERT achieves comparable or slightly higher grouped performance on base and derived entities than the base-sized BERT (DE) model while the BERT (Multi) lags behind, but part entities remain difficult across all architectures, especially for BERT (Multi).
+Overall, the grouped error analysis reinforces the conclusion that encoder adaptability, rather than model size alone, is the primary driver of improvements for fine-grained entity distinctions.
 
 
 % ---------- 12. LIMITATIONS ----------
 \section{Limitations}
-% Outer-only evaluation, nested not modeled, subword labeling choice, compute limits.
-TODO
+
+While this study provides a systematic comparison of model size, training regime, and architectural variants for German named entity recognition, several limitations should be acknowledged.
+
+First, the experimental scope is restricted to a limited set of model architectures. Only three transformer models were evaluated, covering a distilled model and two base-sized BERT variants. Although these models represent commonly used architectures with differing capacity and efficiency characteristics, the findings may not directly generalize to larger models, alternative pretraining objectives, or more recent architectures. Consequently, conclusions regarding model size should be interpreted within the bounds of the selected model spectrum.
+
+Second, the exploration of training strategies is intentionally constrained. The study compares two extreme regimes - full fine-tuning and fully frozen encoders - without considering intermediate approaches such as partial layer freezing, gradual unfreezing schedules, or layer-wise learning rate adaptations. These strategies could potentially offer improved trade-offs between performance and efficiency and remain unexplored in the present work.
+
+Third, the training duration and architectural variants were examined only within a narrow range. Full fine-tuning experiments were limited to four epochs, and the last-layer aggregation analysis considered only a single configuration based on concatenation of the final four hidden layers. The impact of longer training, alternative epoch schedules, or varying the number of concatenated layers was not investigated. As a result, the reported effects of architectural modifications may not fully capture their potential under different optimization settings.
+
+Fourth, evaluation is limited to a single dataset and task formulation. All experiments were conducted on the GermEval14 benchmark and focused exclusively on outer entities, excluding nested entity structures. While this enables a controlled and consistent comparison, it restricts the applicability of the results to flat German NER and does not address performance on nested entities or other domains.
+
+Finally, the study focuses exclusively on named entity recognition. Although the observed trends provide insights into the relationship between encoder adaptability, model size, and efficiency, they may not transfer directly to other sequence labeling tasks or downstream NLP applications with different structural or semantic requirements.
+
+Despite these limitations, the experimental design enables a controlled and transparent analysis of key trade-offs in Transformer-based German NER. The results therefore offer meaningful insights within the defined scope and provide a foundation for future work exploring broader model families, training strategies, and task settings.
+
 
 % ---------- 13. CONCLUSION + FUTURE WORK ----------
 \section{Conclusion and Future Work}
-% 5-8 sentences: recap + next steps.
-TODO
+
+This work systematically examined the trade-offs between model size, training regime, and architectural design for German named entity recognition using Transformer-based models. Across all configurations, encoder adaptability emerged as the dominant factor for performance, with full fine-tuning consistently outperforming frozen encoder setups, even when using smaller models. While larger architectures achieved the highest absolute F1-scores under full fine-tuning, compact models such as DistilBERT offered a particularly favorable efficiency-performance balance, especially under constrained computational budgets. Lightweight architectural extensions, such as last-layer concatenation, were shown to partially mitigate performance degradation in restricted training settings, but remained secondary to end-to-end encoder adaptation.
+
+Future work could extend this analysis to a broader range of model architectures and sizes, including more recent or larger pretrained Transformers. Additionally, intermediate fine-tuning strategies, such as partial freezing or gradual unfreezing, may yield improved trade-offs between efficiency and performance and warrant systematic investigation. Expanding the evaluation to nested entity recognition, additional datasets, or other sequence labeling tasks would further assess the generality of the observed trends.
+
 
 % ---------- REFERENCES ----------
-\nocite{*}
-\bibliographystyle{plainnat}
+\bibliographystyle{unsrtnat}
 \bibliography{references}
 
 % ---------- APPENDIX ----------
@@ -529,7 +676,7 @@ Frozen & $3\times10^{-3}$ & 10 & 0.7196 & 0.7603 & 0.7394 \\
     \centering
     \begin{tabular}{lr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} \\
         \midrule
         DistilBERT (DE) & 440 \\
         BERT (DE)       & 794 \\
@@ -544,7 +691,7 @@ Frozen & $3\times10^{-3}$ & 10 & 0.7196 & 0.7603 & 0.7394 \\
     \centering
     \begin{tabular}{lr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} \\
         \midrule
         DistilBERT (DE) & 371 \\
         BERT (DE)       & 717 \\
@@ -562,7 +709,7 @@ Frozen & $3\times10^{-3}$ & 10 & 0.7196 & 0.7603 & 0.7394 \\
     \centering
     \begin{tabular}{lr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} \\
         \midrule
         DistilBERT (DE) & 5.66 \\
         BERT (DE)       & 10.49 \\
@@ -577,7 +724,7 @@ Frozen & $3\times10^{-3}$ & 10 & 0.7196 & 0.7603 & 0.7394 \\
     \centering
     \begin{tabular}{lr}
         \toprule
-        \textbf{Model} & \textbf{Runtime (sec)} \\
+        \textbf{Model} & \textbf{Runtime (s)} \\
         \midrule
         DistilBERT (DE) & 6.87 \\
         BERT (DE)       & 11.78 \\
